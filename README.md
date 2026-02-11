@@ -151,7 +151,7 @@ TermiTalk is tuned for minimal latency:
 
 - **"PortAudio library not found"** — Install `libportaudio2` (Ubuntu) or `portaudio` (macOS)
 - **"this platform is not supported"** — Ensure you have an X11/Wayland display (pynput requires it)
-- **Permission denied** — On macOS, grant Accessibility permissions to your terminal app
+- **"This process is not trusted" (macOS)** — Go to **System Settings > Privacy & Security > Accessibility** and add your terminal app (iTerm2, Terminal.app, etc.). Restart TermiTalk after granting access
 - **Wrong microphone** — Check `python -m sounddevice` to list audio devices
 - **Paste not working** — macOS uses `pbcopy`/`pbpaste` (built-in). Linux/Wayland needs `wl-clipboard` (`wl-copy`). Linux/X11 needs `xclip` or `xsel`. Falls back to keystroke mode if none found
 

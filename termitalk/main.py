@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import platform
 import signal
 import sys
 import threading
@@ -79,6 +80,7 @@ class TermiTalk:
     def run(self):
         """Start the daemon."""
         _banner()
+        _check_macos_accessibility()
         _print_config()
 
         # Load model and warm up
@@ -114,12 +116,59 @@ def _banner():
 """)
 
 
+def _check_macos_accessibility():
+    """On macOS, check if the process has Accessibility permissions and guide the user."""
+    if platform.system() != "Darwin":
+        return
+
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["osascript", "-e",
+             'tell application "System Events" to keystroke ""'],
+            capture_output=True, timeout=5,
+        )
+        if result.returncode != 0:
+            raise PermissionError()
+    except Exception:
+        terminal = _detect_macos_terminal()
+        print(f"""{_YELLOW}{_BOLD}  Accessibility permission required{_RESET}
+
+  macOS needs you to grant Accessibility access so TermiTalk
+  can listen for the global hotkey and type into other apps.
+
+  {_BOLD}To fix:{_RESET}
+  1. Open {_BOLD}System Settings > Privacy & Security > Accessibility{_RESET}
+  2. Click the + button and add {_BOLD}{terminal}{_RESET}
+  3. Restart TermiTalk
+""", file=sys.stderr)
+
+
+def _detect_macos_terminal() -> str:
+    """Best-effort detection of which terminal app is running on macOS."""
+    import os
+    term_program = os.environ.get("TERM_PROGRAM", "")
+    mapping = {
+        "iTerm.app": "iTerm2",
+        "Apple_Terminal": "Terminal.app",
+        "vscode": "Visual Studio Code",
+        "WarpTerminal": "Warp",
+        "Alacritty": "Alacritty",
+        "ghostty": "Ghostty",
+    }
+    return mapping.get(term_program, term_program or "your terminal app")
+
+
 def _print_config():
     """Display active configuration."""
     hotkey_names = " + ".join(k.capitalize() for k in config.HOTKEY_KEYS_SPEC)
     print(f"  {_DIM}Model:{_RESET}   {config.MODEL_NAME} ({config.COMPUTE_TYPE} on {config.DEVICE})", file=sys.stderr)
     print(f"  {_DIM}Hotkey:{_RESET}  {hotkey_names}", file=sys.stderr)
-    inject_mode = "paste (Ctrl+Shift+V)" if config.PASTE_MODE else "keystroke"
+    if config.PASTE_MODE:
+        paste_key = "Cmd+V" if platform.system() == "Darwin" else "Ctrl+Shift+V"
+        inject_mode = f"paste ({paste_key})"
+    else:
+        inject_mode = "keystroke"
     print(f"  {_DIM}Inject:{_RESET}  {inject_mode}", file=sys.stderr)
     opts = []
     if config.AUTO_ENTER:
