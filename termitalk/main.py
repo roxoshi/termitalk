@@ -119,6 +119,8 @@ def _print_config():
     hotkey_names = " + ".join(k.capitalize() for k in config.HOTKEY_KEYS_SPEC)
     print(f"  {_DIM}Model:{_RESET}   {config.MODEL_NAME} ({config.COMPUTE_TYPE} on {config.DEVICE})", file=sys.stderr)
     print(f"  {_DIM}Hotkey:{_RESET}  {hotkey_names}", file=sys.stderr)
+    inject_mode = "paste (Ctrl+Shift+V)" if config.PASTE_MODE else "keystroke"
+    print(f"  {_DIM}Inject:{_RESET}  {inject_mode}", file=sys.stderr)
     opts = []
     if config.AUTO_ENTER:
         opts.append("auto-enter")
@@ -166,6 +168,10 @@ def main():
         help="Press Enter after injecting text",
     )
     parser.add_argument(
+        "--paste", action="store_true", default=config.PASTE_MODE,
+        help="Use clipboard paste (Ctrl+Shift+V) instead of keystroke typing — much faster, ideal for Claude Code",
+    )
+    parser.add_argument(
         "-v", "--verbose", action="store_true", default=config.VERBOSE,
         help="Enable verbose/debug logging",
     )
@@ -177,6 +183,7 @@ def main():
     config.DEVICE = args.device
     config.COMPUTE_TYPE = args.compute_type
     config.AUTO_ENTER = args.auto_enter
+    config.PASTE_MODE = args.paste
     config.VERBOSE = args.verbose
 
     # Set up logging

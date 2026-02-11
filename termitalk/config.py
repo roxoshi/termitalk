@@ -13,11 +13,14 @@ def get_hotkey_keys():
 
 
 # --- Whisper Model ---
-MODEL_NAME = "distil-large-v3"
+MODEL_NAME = "large-v3-turbo"  # Fastest large model; alternatives: distil-large-v3, tiny.en, base.en
 DEVICE = "auto"  # "auto", "cpu", or "cuda"
 COMPUTE_TYPE = "int8"  # "int8" for CPU, "float16" for GPU
 BEAM_SIZE = 1  # 1 = fastest, 5 = most accurate
 LANGUAGE = "en"
+TEMPERATURE = 0.0  # Single pass, no fallback — avoids up to 5 retry passes
+CONDITION_ON_PREVIOUS_TEXT = False  # Skip prompt reuse — faster for short commands
+CPU_THREADS = 4  # CTranslate2 intra-op threads (0 = auto)
 
 # Initial prompt to bias Whisper toward CLI/programming vocabulary
 INITIAL_PROMPT = (
@@ -41,6 +44,7 @@ VAD_WINDOW_SIZE_MS = 30  # VAD analysis window size (ms) — must be 30, 60, or 
 # --- Keyboard Injection ---
 KEYSTROKE_DELAY = 0.008  # Seconds between simulated keystrokes
 AUTO_ENTER = False  # If True, press Enter after injecting text
+PASTE_MODE = False  # If True, use clipboard paste (Ctrl+Shift+V) instead of keystroke typing
 
 # --- UX ---
 VERBOSE = False

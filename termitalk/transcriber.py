@@ -26,6 +26,7 @@ def load_model() -> WhisperModel:
         config.MODEL_NAME,
         device=config.DEVICE,
         compute_type=config.COMPUTE_TYPE,
+        cpu_threads=config.CPU_THREADS,
     )
     logger.info("Model loaded in %.2fs", time.perf_counter() - t0)
     return _model
@@ -41,6 +42,9 @@ def warm_up():
         dummy,
         beam_size=config.BEAM_SIZE,
         language=config.LANGUAGE,
+        temperature=config.TEMPERATURE,
+        condition_on_previous_text=config.CONDITION_ON_PREVIOUS_TEXT,
+        without_timestamps=True,
     )
     # Consume the generator to actually run inference
     for _ in segments:
@@ -69,6 +73,8 @@ def transcribe(audio: np.ndarray) -> str:
         beam_size=config.BEAM_SIZE,
         language=config.LANGUAGE,
         initial_prompt=config.INITIAL_PROMPT,
+        temperature=config.TEMPERATURE,
+        condition_on_previous_text=config.CONDITION_ON_PREVIOUS_TEXT,
         vad_filter=False,  # We handle VAD ourselves for tighter control
         without_timestamps=True,
     )

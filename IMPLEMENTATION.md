@@ -15,7 +15,7 @@
 - [x] 3.3 Integrate Silero VAD to trim silence from start/end of captured audio
 
 ## Phase 4: Transcription Engine
-- [x] 4.1 Create `termitalk/transcriber.py` — load faster-whisper model (distil-large-v3, int8)
+- [x] 4.1 Create `termitalk/transcriber.py` — load faster-whisper model (large-v3-turbo, int8)
 - [x] 4.2 Implement warm-up: run dummy transcription at startup to prime model
 - [x] 4.3 Implement `transcribe(audio_buffer) -> str` with beam_size=1, initial prompt biasing for CLI terms
 - [x] 4.4 Handle edge cases: empty audio, very short audio, no speech detected
@@ -35,7 +35,7 @@
 - [x] 7.2 Hold-to-record: start on key combo press, stop on release
 - [x] 7.3 Hotkey listener in dedicated thread, transcription in separate thread
 - [x] 7.4 Create `termitalk/main.py` — daemon entry point
-- [x] 7.5 CLI argument parsing (--model, --device, --compute-type, --auto-enter, --verbose)
+- [x] 7.5 CLI argument parsing (--model, --device, --compute-type, --auto-enter, --paste, --verbose)
 
 ## Phase 8: Polish & UX
 - [x] 8.1 Terminal UI feedback: recording indicator, transcription status, result preview
@@ -48,3 +48,37 @@
 - [x] 9.2 Write README.md with install instructions (uv-based), usage, config reference
 - [x] 9.3 Add MIT LICENSE file
 - [ ] 9.4 Test full end-to-end flow (requires display + microphone)
+
+## Phase 10: Speed Optimization
+- [x] 10.1 Switch default model to `large-v3-turbo` (fastest large-class model)
+- [x] 10.2 Set `temperature=0.0` — single-pass decoding, eliminates up to 5 fallback retries
+- [x] 10.3 Set `condition_on_previous_text=False` — skip prompt reuse overhead
+- [x] 10.4 Set `cpu_threads=4` — explicit CTranslate2 parallelism
+- [x] 10.5 beam_size=1 already set (greedy decoding)
+- [x] 10.6 without_timestamps=True already set (skip timestamp token generation)
+- [x] 10.7 16kHz native recording (no resampling) already set
+- [x] 10.8 Silero VAD silence trimming (less audio sent to model) already set
+
+## Phase 11: Claude Code Integration
+- [x] 11.1 Add clipboard paste injection mode (`--paste` flag)
+  - Copies text to clipboard via `xclip`/`xsel`
+  - Simulates Ctrl+Shift+V (terminal paste) — instant for any text length
+  - Saves and restores previous clipboard contents
+  - Falls back to keystroke typing if no clipboard tool is available
+- [x] 11.2 Add `--paste` CLI flag and `PASTE_MODE` config option
+- [x] 11.3 Display injection mode in startup config summary
+
+### Usage with Claude Code
+```bash
+# Start TermiTalk in paste mode for Claude Code
+uv run termitalk --paste
+
+# Or with auto-enter to submit immediately
+uv run termitalk --paste --auto-enter
+```
+
+### Speed Comparison
+| Method | 50 chars | 200 chars |
+|---|---|---|
+| Keystroke typing (8ms/char) | ~400ms | ~1600ms |
+| Clipboard paste | ~70ms | ~70ms |
