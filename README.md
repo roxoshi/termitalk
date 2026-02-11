@@ -16,17 +16,20 @@ A 100% local, privacy-focused speech-to-text tool for the terminal. Dictate bash
 
 - Python 3.10+
 - `ffmpeg` and `libportaudio2`
-- `xclip` or `xsel` (for paste mode on Linux)
+- Paste mode clipboard tools (optional):
+  - **macOS**: `pbcopy`/`pbpaste` (built-in, nothing to install)
+  - **Linux/Wayland**: `wl-clipboard` (`sudo apt install wl-clipboard`)
+  - **Linux/X11**: `xclip` (`sudo apt install xclip`)
 
 ```bash
 # Ubuntu/Debian
-sudo apt install ffmpeg libportaudio2 xclip
+sudo apt install ffmpeg libportaudio2 wl-clipboard
 
 # macOS
 brew install ffmpeg portaudio
 
 # Arch
-sudo pacman -S ffmpeg portaudio xclip
+sudo pacman -S ffmpeg portaudio wl-clipboard
 ```
 
 ### Install TermiTalk
@@ -150,7 +153,7 @@ TermiTalk is tuned for minimal latency:
 - **"this platform is not supported"** — Ensure you have an X11/Wayland display (pynput requires it)
 - **Permission denied** — On macOS, grant Accessibility permissions to your terminal app
 - **Wrong microphone** — Check `python -m sounddevice` to list audio devices
-- **Paste not working** — Install `xclip` or `xsel`, or fall back to keystroke mode (no `--paste` flag)
+- **Paste not working** — macOS uses `pbcopy`/`pbpaste` (built-in). Linux/Wayland needs `wl-clipboard` (`wl-copy`). Linux/X11 needs `xclip` or `xsel`. Falls back to keystroke mode if none found
 
 ## License
 
