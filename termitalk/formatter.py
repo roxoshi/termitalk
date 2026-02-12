@@ -1,9 +1,16 @@
 """Text formatter: converts spoken phrases to CLI symbols and cleans output."""
 
+import os
 import re
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_CORRECTIONS_PATH = Path(os.environ.get(
+    "TERMITALK_CORRECTIONS",
+    Path.home() / ".config" / "termitalk" / "corrections.toml",
+))
 
 # Filler words to strip
 FILLERS = {"um", "uh", "uh,", "um,", "like,", "you know,", "so,", "well,", "hmm", "er"}
@@ -105,6 +112,67 @@ def _classify_token(token: str) -> str:
     if token and not any(c.isalnum() for c in token):
         return "infix"
     return "word"
+
+
+def load_user_corrections() -> int:
+    """Load custom corrections from ~/.config/termitalk/corrections.toml.
+
+    Merges user-defined phrase and symbol mappings into the formatter.
+    Returns the number of corrections loaded.
+
+    File format:
+        [phrases]
+        "my project" = "myproject"
+        "kube control" = "kubectl"
+
+        [symbols]
+        "arrow" = "->"
+        "fat arrow" = "=>"
+
+        [replacements]
+        "kubernetes" = "k8s"
+    """
+    if not _CORRECTIONS_PATH.exists():
+        return 0
+
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        # Python < 3.11
+        try:
+            import tomli as tomllib
+        except ModuleNotFoundError:
+            logger.warning("Cannot load corrections: tomllib not available (Python 3.11+ required)")
+            return 0
+
+    try:
+        with open(_CORRECTIONS_PATH, "rb") as f:
+            data = tomllib.load(f)
+    except Exception as e:
+        logger.warning("Failed to load corrections from %s: %s", _CORRECTIONS_PATH, e)
+        return 0
+
+    count = 0
+
+    # Phrases: multi-word spoken → text replacement (inserted at the front of PHRASE_MAP)
+    for spoken, replacement in data.get("phrases", {}).items():
+        PHRASE_MAP.insert(0, (spoken.lower(), replacement))
+        count += 1
+
+    # Symbols: single-word spoken → symbol with "prefix" join behavior
+    for spoken, symbol in data.get("symbols", {}).items():
+        WORD_MAP[spoken.lower()] = (symbol, "prefix")
+        count += 1
+
+    # Replacements: simple text substitutions (added as phrase maps)
+    for spoken, replacement in data.get("replacements", {}).items():
+        PHRASE_MAP.insert(0, (spoken.lower(), replacement))
+        count += 1
+
+    if count > 0:
+        logger.info("Loaded %d custom corrections from %s", count, _CORRECTIONS_PATH)
+
+    return count
 
 
 def format_text(text: str) -> str:

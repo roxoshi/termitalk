@@ -8,8 +8,54 @@ HOTKEY_KEYS_SPEC = ("ctrl_l", "shift", "space")
 
 def get_hotkey_keys():
     """Resolve hotkey key spec to actual pynput Key objects (requires display)."""
-    from pynput.keyboard import Key
-    return {getattr(Key, name) for name in HOTKEY_KEYS_SPEC}
+    from pynput.keyboard import Key, KeyCode
+    keys = set()
+    for name in HOTKEY_KEYS_SPEC:
+        if hasattr(Key, name):
+            keys.add(getattr(Key, name))
+        elif len(name) == 1:
+            keys.add(KeyCode.from_char(name))
+        else:
+            raise ValueError(f"Cannot resolve key: {name!r}")
+    return keys
+
+
+# Map human-readable key names to pynput Key attribute names
+_KEY_ALIASES = {
+    "ctrl": "ctrl_l", "control": "ctrl_l", "ctrl_l": "ctrl_l", "ctrl_r": "ctrl_r",
+    "shift": "shift", "shift_l": "shift", "shift_r": "shift_r",
+    "alt": "alt_l", "option": "alt_l", "alt_l": "alt_l", "alt_r": "alt_r",
+    "cmd": "cmd", "command": "cmd", "super": "cmd", "meta": "cmd", "cmd_l": "cmd_l", "cmd_r": "cmd_r",
+    "space": "space", "enter": "enter", "return": "enter",
+    "tab": "tab", "esc": "esc", "escape": "esc",
+    "up": "up", "down": "down", "left": "left", "right": "right",
+    "f1": "f1", "f2": "f2", "f3": "f3", "f4": "f4", "f5": "f5", "f6": "f6",
+    "f7": "f7", "f8": "f8", "f9": "f9", "f10": "f10", "f11": "f11", "f12": "f12",
+}
+
+
+def parse_hotkey(hotkey_str: str) -> tuple[str, ...]:
+    """Parse a human-readable hotkey string into a HOTKEY_KEYS_SPEC tuple.
+
+    Examples:
+        "ctrl+shift+space" → ("ctrl_l", "shift", "space")
+        "cmd+alt+r" → ("cmd", "alt_l", "r")
+
+    Raises ValueError for unrecognized key names.
+    """
+    parts = [p.strip().lower() for p in hotkey_str.split("+")]
+    result = []
+    for part in parts:
+        if part in _KEY_ALIASES:
+            result.append(_KEY_ALIASES[part])
+        elif len(part) == 1 and part.isalnum():
+            result.append(part)  # Single character key
+        else:
+            valid = ", ".join(sorted(set(_KEY_ALIASES.keys())))
+            raise ValueError(
+                f"Unknown key: {part!r}. Valid modifier/special keys: {valid}"
+            )
+    return tuple(result)
 
 
 # --- Whisper Model ---
@@ -20,7 +66,7 @@ BEAM_SIZE = 1  # 1 = fastest, 5 = most accurate
 LANGUAGE = "en"
 TEMPERATURE = 0.0  # Single pass, no fallback — avoids up to 5 retry passes
 CONDITION_ON_PREVIOUS_TEXT = False  # Skip prompt reuse — faster for short commands
-CPU_THREADS = 4  # CTranslate2 intra-op threads (0 = auto)
+CPU_THREADS = 0  # CTranslate2 intra-op threads (0 = auto/all cores)
 
 # Initial prompt to bias Whisper toward CLI/programming vocabulary
 INITIAL_PROMPT = (
@@ -46,5 +92,13 @@ KEYSTROKE_DELAY = 0.008  # Seconds between simulated keystrokes
 AUTO_ENTER = False  # If True, press Enter after injecting text
 PASTE_MODE = False  # If True, use clipboard paste (Ctrl+Shift+V) instead of keystroke typing
 
+# --- Streaming ---
+STREAMING_ENABLED = True  # Show partial transcription while recording
+STREAMING_INTERVAL = 1.0  # Seconds between streaming transcription snapshots
+STREAMING_FRESHNESS = 0.5  # Max age (seconds) of streaming result to reuse on release
+STREAMING_MIN_AUDIO = 0.5  # Minimum audio duration (seconds) before first streaming attempt
+
 # --- UX ---
 VERBOSE = False
+SOUND_ENABLED = True  # Play audio cues on record start/stop/error
+HISTORY_ENABLED = True  # Log transcriptions to ~/.local/share/termitalk/history.log

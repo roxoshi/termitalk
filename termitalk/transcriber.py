@@ -19,13 +19,27 @@ def load_model() -> WhisperModel:
     if _model is not None:
         return _model
 
+    device = config.DEVICE
+    compute_type = config.COMPUTE_TYPE
+
+    # Smart GPU auto-detection: if device=auto and CUDA is available,
+    # upgrade compute_type to float16 for faster GPU inference
+    if device == "auto" and compute_type == "int8":
+        try:
+            import torch
+            if torch.cuda.is_available():
+                compute_type = "float16"
+                logger.info("CUDA detected — using float16 for GPU acceleration")
+        except ImportError:
+            pass
+
     logger.info("Loading Whisper model '%s' (device=%s, compute=%s)...",
-                config.MODEL_NAME, config.DEVICE, config.COMPUTE_TYPE)
+                config.MODEL_NAME, device, compute_type)
     t0 = time.perf_counter()
     _model = WhisperModel(
         config.MODEL_NAME,
-        device=config.DEVICE,
-        compute_type=config.COMPUTE_TYPE,
+        device=device,
+        compute_type=compute_type,
         cpu_threads=config.CPU_THREADS,
     )
     logger.info("Model loaded in %.2fs", time.perf_counter() - t0)
@@ -50,6 +64,36 @@ def warm_up():
     for _ in segments:
         pass
     logger.info("Warm-up complete in %.2fs", time.perf_counter() - t0)
+
+
+def transcribe_streaming(audio: np.ndarray) -> str:
+    """Transcribe audio for streaming display (lower minimum, reduced logging).
+
+    Args:
+        audio: 1-D float32 numpy array at 16kHz.
+
+    Returns:
+        Transcribed text string, or empty string if nothing was recognized.
+    """
+    model = load_model()
+
+    if len(audio) < config.SAMPLE_RATE * 0.3:  # Less than 300ms
+        return ""
+
+    segments, info = model.transcribe(
+        audio,
+        beam_size=config.BEAM_SIZE,
+        language=config.LANGUAGE,
+        initial_prompt=config.INITIAL_PROMPT,
+        temperature=config.TEMPERATURE,
+        condition_on_previous_text=config.CONDITION_ON_PREVIOUS_TEXT,
+        vad_filter=False,
+        without_timestamps=True,
+    )
+
+    text = "".join(seg.text for seg in segments).strip()
+    logger.debug("Streaming transcription: %r", text)
+    return text
 
 
 def transcribe(audio: np.ndarray) -> str:

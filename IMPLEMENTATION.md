@@ -82,3 +82,51 @@ uv run termitalk --paste --auto-enter
 |---|---|---|
 | Keystroke typing (8ms/char) | ~400ms | ~1600ms |
 | Clipboard paste | ~70ms | ~70ms |
+
+---
+
+## Phase 12: Audio Feedback Cues
+**Why:** When dictating into another window (Claude Code, vim, etc.) you can't see TermiTalk's terminal status. Audio cues are the only way to know recording started/stopped.
+- [x] 12.1 Play a short sound on recording start (low tone "boop")
+- [x] 12.2 Play a different sound on recording stop/processing complete (rising two-tone beep)
+- [x] 12.3 Play an error sound on failure (descending tone)
+- [x] 12.4 Generate tones programmatically with numpy (no bundled WAV files needed)
+- [x] 12.5 Add `--no-sound` flag to disable audio cues
+- [x] 12.6 Play "ready" chime at startup
+- [x] 12.7 Non-blocking playback via background threads
+
+## Phase 13: Custom Vocabulary & Corrections File
+**Why:** Users need project-specific term mappings without editing source code.
+- [x] 13.1 TOML format with `[phrases]`, `[symbols]`, and `[replacements]` sections
+- [x] 13.2 Load corrections from `~/.config/termitalk/corrections.toml` at startup
+- [x] 13.3 Merge user corrections into formatter's PHRASE_MAP and WORD_MAP
+- [x] 13.4 Log loaded custom corrections count at startup
+- [x] 13.5 Support `TERMITALK_CORRECTIONS` env var to override path
+
+## Phase 14: Command History Log
+**Why:** Lets users review past transcriptions, debug accuracy issues, and track what was dictated.
+- [x] 14.1 Log each transcription to `~/.local/share/termitalk/history.log`
+- [x] 14.2 Format: `[timestamp] (Nms) raw: "..." -> formatted` with processing time
+- [x] 14.3 Add `--no-history` flag to disable logging
+- [x] 14.4 Add `--history` flag to display recent entries and exit
+
+## Phase 15: Configurable Hotkey via CLI
+**Why:** Different keyboards/workflows need different hotkeys. Editing `config.py` is friction.
+- [x] 15.1 Add `--hotkey` CLI flag: `--hotkey "ctrl+alt+space"`, `--hotkey "cmd+shift+r"`
+- [x] 15.2 Parse human-readable key names (ctrl, shift, alt, cmd, super, f1-f12, etc.)
+- [x] 15.3 Validate hotkey format with clear error on invalid input
+- [x] 15.4 Support single character keys in combos (e.g., `ctrl+alt+r`)
+
+## Phase 16: Wayland-Native Input Backend (planned)
+**Why:** pynput relies on X11 — both the hotkey listener and keyboard injection fail on Wayland.
+- [ ] 16.1 Add `evdev`-based global hotkey listener as Wayland fallback
+- [ ] 16.2 Add `wtype` injection backend for Wayland keyboard injection
+- [ ] 16.3 Add `ydotool` injection backend as fallback
+- [ ] 16.4 Auto-detect display server and select backend at startup
+- [ ] 16.5 Print clear setup instructions if permissions are missing
+
+## Phase 17: Smart GPU Auto-Detection
+**Why:** Users with NVIDIA GPUs get much faster inference with float16 but must manually set it.
+- [x] 17.1 When `device=auto`, detect CUDA availability via `torch.cuda.is_available()`
+- [x] 17.2 Auto-set `compute_type=float16` when CUDA is detected
+- [x] 17.3 Log detected device and compute type upgrade at startup
