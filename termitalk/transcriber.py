@@ -66,35 +66,6 @@ def warm_up():
     logger.info("Warm-up complete in %.2fs", time.perf_counter() - t0)
 
 
-def transcribe_streaming(audio: np.ndarray) -> str:
-    """Transcribe audio for streaming display (lower minimum, reduced logging).
-
-    Args:
-        audio: 1-D float32 numpy array at 16kHz.
-
-    Returns:
-        Transcribed text string, or empty string if nothing was recognized.
-    """
-    model = load_model()
-
-    if len(audio) < config.SAMPLE_RATE * 0.3:  # Less than 300ms
-        return ""
-
-    segments, info = model.transcribe(
-        audio,
-        beam_size=config.BEAM_SIZE,
-        language=config.LANGUAGE,
-        initial_prompt=config.INITIAL_PROMPT,
-        temperature=config.TEMPERATURE,
-        condition_on_previous_text=config.CONDITION_ON_PREVIOUS_TEXT,
-        vad_filter=False,
-        without_timestamps=True,
-    )
-
-    text = "".join(seg.text for seg in segments).strip()
-    logger.debug("Streaming transcription: %r", text)
-    return text
-
 
 def transcribe(audio: np.ndarray) -> str:
     """Transcribe audio buffer to text.

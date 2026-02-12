@@ -92,12 +92,6 @@ KEYSTROKE_DELAY = 0.008  # Seconds between simulated keystrokes
 AUTO_ENTER = False  # If True, press Enter after injecting text
 PASTE_MODE = False  # If True, use clipboard paste (Ctrl+Shift+V) instead of keystroke typing
 
-# --- Streaming ---
-STREAMING_ENABLED = True  # Show partial transcription while recording
-STREAMING_INTERVAL = 1.0  # Seconds between streaming transcription snapshots
-STREAMING_FRESHNESS = 0.5  # Max age (seconds) of streaming result to reuse on release
-STREAMING_MIN_AUDIO = 0.5  # Minimum audio duration (seconds) before first streaming attempt
-
 # --- UX ---
 VERBOSE = False
 SOUND_ENABLED = True  # Play audio cues on record start/stop/error

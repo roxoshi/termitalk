@@ -65,16 +65,6 @@ class Recorder:
             logger.debug("Recording stopped — %d samples (%.2fs)", len(audio), len(audio) / config.SAMPLE_RATE)
             return audio
 
-    def snapshot(self) -> np.ndarray | None:
-        """Return a copy of accumulated audio without stopping recording (thread-safe).
-
-        Returns None if no audio has been captured yet.
-        """
-        with self._lock:
-            if not self._chunks:
-                return None
-            return np.concatenate(self._chunks, axis=0).flatten()
-
     def _audio_callback(self, indata: np.ndarray, frames: int, time_info, status):
         if status:
             logger.warning("Audio callback status: %s", status)
