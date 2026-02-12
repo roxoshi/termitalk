@@ -8,14 +8,8 @@ import sys
 import threading
 import time
 
-from termitalk import config
-from termitalk.audio import Recorder, trim_silence
-from termitalk.transcriber import load_model, warm_up, transcribe, get_backend
-from termitalk.formatter import format_text, load_user_corrections
-from termitalk.injector import inject_text
-from termitalk.hotkey import HotkeyListener
-from termitalk import sounds
-from termitalk.history import log_transcription, show_history
+from termitalk import __version__, config
+from termitalk.doctor import check_dependencies
 
 logger = logging.getLogger("termitalk")
 
@@ -29,20 +23,45 @@ _CYAN = "\033[96m"
 _RESET = "\033[0m"
 
 
+def _load_app_modules():
+    """Import heavy dependencies (audio, model, etc.) after arg parsing."""
+    from termitalk.audio import Recorder, trim_silence
+    from termitalk.transcriber import load_model, warm_up, transcribe, get_backend
+    from termitalk.formatter import format_text, load_user_corrections
+    from termitalk.injector import inject_text
+    from termitalk.hotkey import HotkeyListener
+    from termitalk import sounds
+    from termitalk.history import log_transcription, show_history
+
+    return {
+        "Recorder": Recorder, "trim_silence": trim_silence,
+        "load_model": load_model, "warm_up": warm_up,
+        "transcribe": transcribe, "get_backend": get_backend,
+        "format_text": format_text, "load_user_corrections": load_user_corrections,
+        "inject_text": inject_text, "HotkeyListener": HotkeyListener,
+        "sounds": sounds,
+        "log_transcription": log_transcription, "show_history": show_history,
+    }
+
+
+# Populated by _load_app_modules() before TermiTalk is instantiated
+_m: dict = {}
+
+
 class TermiTalk:
     """Core application: wires hotkey → recorder → transcriber → formatter → injector."""
 
     def __init__(self):
-        self._recorder = Recorder()
+        self._recorder = _m["Recorder"]()
         self._processing_lock = threading.Lock()
-        self._hotkey = HotkeyListener(
+        self._hotkey = _m["HotkeyListener"](
             on_activate=self._on_record_start,
             on_deactivate=self._on_record_stop,
         )
 
     def _on_record_start(self):
         """Called when the push-to-talk hotkey is pressed."""
-        sounds.play("start")
+        _m["sounds"].play("start")
         self._recorder.start()
         _status("recording", "Listening...")
 
@@ -51,7 +70,7 @@ class TermiTalk:
         audio = self._recorder.stop()
 
         if audio is None or len(audio) == 0:
-            sounds.play("error")
+            _m["sounds"].play("error")
             _status("warn", "No audio captured")
             return
 
@@ -61,35 +80,35 @@ class TermiTalk:
             _status("processing", "Processing...")
 
             # VAD: trim silence
-            trimmed = trim_silence(audio)
+            trimmed = _m["trim_silence"](audio)
             if trimmed is None:
-                sounds.play("error")
+                _m["sounds"].play("error")
                 _status("warn", "No speech detected")
                 return
 
             # Transcribe
-            raw_text = transcribe(trimmed)
+            raw_text = _m["transcribe"](trimmed)
             if not raw_text:
-                sounds.play("error")
+                _m["sounds"].play("error")
                 _status("warn", "No text recognized")
                 return
 
             # Format
-            formatted = format_text(raw_text)
+            formatted = _m["format_text"](raw_text)
             if not formatted:
-                sounds.play("error")
+                _m["sounds"].play("error")
                 _status("warn", "Empty after formatting")
                 return
 
             elapsed_ms = (time.perf_counter() - t0) * 1000
-            sounds.play("stop")
+            _m["sounds"].play("stop")
             _status("result", formatted)
 
             # Log to history
-            log_transcription(raw_text, formatted, elapsed_ms)
+            _m["log_transcription"](raw_text, formatted, elapsed_ms)
 
             # Inject into active window
-            inject_text(formatted)
+            _m["inject_text"](formatted)
 
     def run(self):
         """Start the daemon."""
@@ -98,19 +117,19 @@ class TermiTalk:
         _print_config()
 
         # Load user corrections
-        n = load_user_corrections()
+        n = _m["load_user_corrections"]()
         if n > 0:
             _status("info", f"Loaded {n} custom corrections")
 
         # Load model and warm up
-        load_model()
-        warm_up()
+        _m["load_model"]()
+        _m["warm_up"]()
 
         # Start hotkey listener
         self._hotkey.start()
         print(file=sys.stderr)
         _status("ready", "Ready! Hold hotkey to speak.")
-        sounds.play("ready")
+        _m["sounds"].play("ready")
 
         # Block main thread until interrupted
         shutdown = threading.Event()
@@ -182,12 +201,13 @@ def _detect_macos_terminal() -> str:
 def _print_config():
     """Display active configuration."""
     hotkey_names = " + ".join(k.capitalize() for k in config.HOTKEY_KEYS_SPEC)
-    backend = get_backend()
+    backend = _m["get_backend"]()
     if backend == "mlx-whisper":
         backend_label = "mlx-whisper (Apple Silicon GPU)"
     else:
         backend_label = f"faster-whisper ({config.COMPUTE_TYPE} on {config.DEVICE})"
-    print(f"  {_DIM}Model:{_RESET}   {config.MODEL_NAME} via {backend_label}", file=sys.stderr)
+    fast_tag = f" {_YELLOW}[fast]{_RESET}" if config.MODEL_NAME == "small.en" else ""
+    print(f"  {_DIM}Model:{_RESET}   {config.MODEL_NAME} via {backend_label}{fast_tag}", file=sys.stderr)
     print(f"  {_DIM}Hotkey:{_RESET}  {hotkey_names}", file=sys.stderr)
     if config.PASTE_MODE:
         paste_key = "Cmd+V" if platform.system() == "Darwin" else "Ctrl+Shift+V"
@@ -229,6 +249,13 @@ def main():
     parser = argparse.ArgumentParser(
         prog="termitalk",
         description="Local, privacy-focused speech-to-text for the terminal.",
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"termitalk {__version__}",
+    )
+    parser.add_argument(
+        "--check", action="store_true", default=False,
+        help="Check system dependencies and exit",
     )
     parser.add_argument(
         "--model", default=config.MODEL_NAME,
@@ -286,6 +313,7 @@ def main():
 
     # Handle --history: show history and exit
     if args.history:
+        from termitalk.history import show_history
         show_history()
         return
 
@@ -318,8 +346,42 @@ def main():
         stream=sys.stderr,
     )
 
-    app = TermiTalk()
-    app.run()
+    # Handle --check: run dependency checks and exit
+    if args.check:
+        ok = check_dependencies(paste_mode=args.paste)
+        sys.exit(0 if ok else 1)
+
+    # Startup health checks
+    if not check_dependencies(paste_mode=args.paste):
+        print(
+            f"\n  {_RED}Cannot start — fix the issues above and try again.{_RESET}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Load heavy modules now that deps are verified
+    global _m
+    _m = _load_app_modules()
+
+    try:
+        app = TermiTalk()
+        app.run()
+    except KeyboardInterrupt:
+        print(file=sys.stderr)
+    except RuntimeError as e:
+        print(f"\n  {_RED}Error:{_RESET} {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        else:
+            print(
+                f"\n  {_RED}Unexpected error:{_RESET} {e}\n"
+                f"  {_DIM}Run with --verbose for full traceback{_RESET}",
+                file=sys.stderr,
+            )
+        sys.exit(1)
 
 
 if __name__ == "__main__":

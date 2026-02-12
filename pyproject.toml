@@ -13,6 +13,9 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Topic :: Utilities",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
 ]
 dependencies = [
     "faster-whisper",
@@ -21,6 +24,11 @@ dependencies = [
     "numpy",
     "silero-vad",
 ]
+
+[project.urls]
+Homepage = "https://github.com/roxoshi/termitalk"
+Repository = "https://github.com/roxoshi/termitalk"
+Issues = "https://github.com/roxoshi/termitalk/issues"
 
 [project.optional-dependencies]
 apple = ["mlx-whisper"]
