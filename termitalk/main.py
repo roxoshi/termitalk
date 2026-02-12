@@ -10,7 +10,7 @@ import time
 
 from termitalk import config
 from termitalk.audio import Recorder, trim_silence
-from termitalk.transcriber import load_model, warm_up, transcribe
+from termitalk.transcriber import load_model, warm_up, transcribe, get_backend
 from termitalk.formatter import format_text, load_user_corrections
 from termitalk.injector import inject_text
 from termitalk.hotkey import HotkeyListener
@@ -182,7 +182,12 @@ def _detect_macos_terminal() -> str:
 def _print_config():
     """Display active configuration."""
     hotkey_names = " + ".join(k.capitalize() for k in config.HOTKEY_KEYS_SPEC)
-    print(f"  {_DIM}Model:{_RESET}   {config.MODEL_NAME} ({config.COMPUTE_TYPE} on {config.DEVICE})", file=sys.stderr)
+    backend = get_backend()
+    if backend == "mlx-whisper":
+        backend_label = "mlx-whisper (Apple Silicon GPU)"
+    else:
+        backend_label = f"faster-whisper ({config.COMPUTE_TYPE} on {config.DEVICE})"
+    print(f"  {_DIM}Model:{_RESET}   {config.MODEL_NAME} via {backend_label}", file=sys.stderr)
     print(f"  {_DIM}Hotkey:{_RESET}  {hotkey_names}", file=sys.stderr)
     if config.PASTE_MODE:
         paste_key = "Cmd+V" if platform.system() == "Darwin" else "Ctrl+Shift+V"
@@ -228,6 +233,16 @@ def main():
     parser.add_argument(
         "--model", default=config.MODEL_NAME,
         help=f"Whisper model name (default: {config.MODEL_NAME})",
+    )
+    parser.add_argument(
+        "--fast", action="store_true", default=False,
+        help="Use small.en model for faster inference (overrides --model)",
+    )
+    parser.add_argument(
+        "--backend", default=config.BACKEND,
+        choices=["auto", "faster-whisper", "mlx-whisper"],
+        help=f"Transcription backend (default: {config.BACKEND}). "
+             "auto selects mlx-whisper on Apple Silicon, faster-whisper elsewhere",
     )
     parser.add_argument(
         "--device", default=config.DEVICE,
@@ -281,7 +296,11 @@ def main():
         except ValueError as e:
             parser.error(str(e))
 
-    config.MODEL_NAME = args.model
+    if args.fast:
+        config.MODEL_NAME = "small.en"
+    else:
+        config.MODEL_NAME = args.model
+    config.BACKEND = args.backend
     config.DEVICE = args.device
     config.COMPUTE_TYPE = args.compute_type
     config.AUTO_ENTER = args.auto_enter

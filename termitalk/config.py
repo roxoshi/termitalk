@@ -60,6 +60,7 @@ def parse_hotkey(hotkey_str: str) -> tuple[str, ...]:
 
 # --- Whisper Model ---
 MODEL_NAME = "large-v3-turbo"  # Fastest large model; alternatives: distil-large-v3, tiny.en, base.en
+BACKEND = "auto"  # "auto" | "faster-whisper" | "mlx-whisper"; auto → mlx-whisper on Apple Silicon, faster-whisper elsewhere
 DEVICE = "auto"  # "auto", "cpu", or "cuda"
 COMPUTE_TYPE = "int8"  # "int8" for CPU, "float16" for GPU
 BEAM_SIZE = 1  # 1 = fastest, 5 = most accurate

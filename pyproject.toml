@@ -22,6 +22,9 @@ dependencies = [
     "silero-vad",
 ]
 
+[project.optional-dependencies]
+apple = ["mlx-whisper"]
+
 [project.scripts]
 termitalk = "termitalk.main:main"
 
