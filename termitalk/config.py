@@ -69,12 +69,40 @@ TEMPERATURE = 0.0  # Single pass, no fallback — avoids up to 5 retry passes
 CONDITION_ON_PREVIOUS_TEXT = False  # Skip prompt reuse — faster for short commands
 CPU_THREADS = 0  # CTranslate2 intra-op threads (0 = auto/all cores)
 
+# --- Audio duration ---
+MIN_AUDIO_DURATION_S = 0.3  # Reject audio shorter than this — no intelligible word is < 300ms
+
+# --- Hallucination filtering ---
+HALLUCINATION_NO_SPEECH_THRESHOLD = 0.6  # Skip segments with no_speech_prob above this
+HALLUCINATION_AVG_LOGPROB_THRESHOLD = -1.0  # Skip segments with avg_logprob below this
+
 # Initial prompt to bias Whisper toward CLI/programming vocabulary
 INITIAL_PROMPT = (
+    # Core commands
     "ls cd git commit push pull sudo apt pip npm docker kubectl "
     "grep sed awk cat echo chmod chown mkdir rm -rf --help -la "
     "python node bash zsh ssh scp curl wget tar zip unzip "
+    # Additional shell commands
+    "find xargs sort uniq wc cut tr tee source export alias which man "
+    # Build tools
+    "make cmake cargo go gcc mvn gradle rustc "
+    # Package managers
+    "uv yarn pnpm conda poetry brew pacman dnf apt-get "
+    # System admin
+    "systemctl journalctl tmux htop ps kill cron systemd "
+    # Networking
+    "rsync netstat ss lsof dig nmap nc ping traceroute "
+    # Common flags
+    "--verbose --force --recursive --all --output --config "
+    # Paths
+    "/dev/null /etc /var /tmp /home localhost "
+    # Port numbers and permissions
+    "8080 3000 443 80 22 755 644 "
+    # Symbols
     "| > >> < && || ; $ ~ / ./ ../ "
+    # Commonly misheard — repeated for emphasis
+    "sudo sudo nginx nginx kubectl kubectl chmod chmod "
+    "stdout stdin stderr .env .gitignore README Makefile Dockerfile "
 )
 
 # --- Audio ---

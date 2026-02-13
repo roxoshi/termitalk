@@ -2,11 +2,30 @@
 
 import logging
 import platform
+import re
 import time
 
 import numpy as np
 
 from termitalk import config
+
+# Known Whisper hallucination phrases (lowercased for matching)
+_HALLUCINATION_BLOCKLIST = {
+    "thank you for watching",
+    "thanks for watching",
+    "please subscribe",
+    "thanks for listening",
+    "thank you for listening",
+    "please like and subscribe",
+    "see you in the next video",
+    "see you next time",
+    "don't forget to subscribe",
+    "like comment and subscribe",
+    "subscribe to my channel",
+}
+
+# Regex for detecting repeated short phrases (4+ chars repeated 3+ times)
+_REPETITION_RE = re.compile(r"(.{4,}?)\1{2,}")
 
 logger = logging.getLogger(__name__)
 
@@ -179,8 +198,9 @@ def transcribe(audio: np.ndarray) -> str:
     load_model()
     backend = get_backend()
 
-    if len(audio) < config.SAMPLE_RATE * 0.1:  # Less than 100ms
-        logger.debug("Audio too short (%.0fms), skipping", len(audio) / config.SAMPLE_RATE * 1000)
+    duration_s = len(audio) / config.SAMPLE_RATE
+    if duration_s < config.MIN_AUDIO_DURATION_S:
+        logger.debug("Audio too short (%.0fms), skipping", duration_s * 1000)
         return ""
 
     t0 = time.perf_counter()
@@ -209,8 +229,49 @@ def transcribe(audio: np.ndarray) -> str:
             vad_filter=False,  # We handle VAD ourselves for tighter control
             without_timestamps=True,
         )
-        text = "".join(seg.text for seg in segments).strip()
+        # Filter segments by confidence — skip hallucinated/noise segments
+        kept = []
+        for seg in segments:
+            if seg.no_speech_prob > config.HALLUCINATION_NO_SPEECH_THRESHOLD:
+                logger.debug("Dropping segment (no_speech_prob=%.2f): %r", seg.no_speech_prob, seg.text)
+                continue
+            if seg.avg_logprob < config.HALLUCINATION_AVG_LOGPROB_THRESHOLD:
+                logger.debug("Dropping segment (avg_logprob=%.2f): %r", seg.avg_logprob, seg.text)
+                continue
+            kept.append(seg.text)
+        text = "".join(kept).strip()
+
+    # Post-transcription hallucination guards
+    text = _filter_hallucinations(text)
 
     elapsed = time.perf_counter() - t0
     logger.debug("Transcribed in %.3fs: %r", elapsed, text)
+    return text
+
+
+def _filter_hallucinations(text: str) -> str:
+    """Reject known Whisper hallucination patterns."""
+    if not text:
+        return ""
+
+    # Static blocklist
+    if text.lower().strip().rstrip(".!?,") in _HALLUCINATION_BLOCKLIST:
+        logger.debug("Hallucination blocked (blocklist): %r", text)
+        return ""
+
+    # Music notes / empty hallucinations
+    if "♪" in text or "♫" in text:
+        logger.debug("Hallucination blocked (music notes): %r", text)
+        return ""
+
+    # Text that is entirely punctuation/whitespace
+    if not any(c.isalnum() for c in text):
+        logger.debug("Hallucination blocked (no alphanumeric): %r", text)
+        return ""
+
+    # Repetition detection
+    if _REPETITION_RE.search(text.lower()):
+        logger.debug("Hallucination blocked (repetition): %r", text)
+        return ""
+
     return text

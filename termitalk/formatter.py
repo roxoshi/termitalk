@@ -4,8 +4,47 @@ import os
 import re
 import logging
 from pathlib import Path
-
 logger = logging.getLogger(__name__)
+
+# CLI term corrections — applied before phrase mapping
+# Each entry: (compiled regex pattern, replacement)
+CLI_CORRECTIONS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"\bpseudo\b", re.IGNORECASE), "sudo"),
+    (re.compile(r"\bsue do\b", re.IGNORECASE), "sudo"),
+    (re.compile(r"\bcube control\b", re.IGNORECASE), "kubectl"),
+    (re.compile(r"\bkube control\b", re.IGNORECASE), "kubectl"),
+    (re.compile(r"\bengine x\b", re.IGNORECASE), "nginx"),
+    (re.compile(r"\bch mod\b", re.IGNORECASE), "chmod"),
+    (re.compile(r"\bch own\b", re.IGNORECASE), "chown"),
+    (re.compile(r"\blocal host\b", re.IGNORECASE), "localhost"),
+    (re.compile(r"\bdev null\b", re.IGNORECASE), "/dev/null"),
+    (re.compile(r"\bsystem control\b", re.IGNORECASE), "systemctl"),
+    (re.compile(r"\bjournal control\b", re.IGNORECASE), "journalctl"),
+    (re.compile(r"\bx args\b", re.IGNORECASE), "xargs"),
+    (re.compile(r"\bstandard out\b", re.IGNORECASE), "stdout"),
+    (re.compile(r"\bstandard in\b", re.IGNORECASE), "stdin"),
+    (re.compile(r"\bstandard error\b", re.IGNORECASE), "stderr"),
+    (re.compile(r"\bdot env\b", re.IGNORECASE), ".env"),
+    (re.compile(r"\bdot git ignore\b", re.IGNORECASE), ".gitignore"),
+    (re.compile(r"\bread me\b", re.IGNORECASE), "README"),
+    (re.compile(r"\bmake file\b", re.IGNORECASE), "Makefile"),
+    (re.compile(r"\bdocker file\b", re.IGNORECASE), "Dockerfile"),
+]
+
+# Digit words for spoken number conversion
+_DIGIT_WORDS = {
+    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+    "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+}
+
+# Direct phrase-map entries for common port/permission patterns
+_NUMBER_PHRASES: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"\beight zero eight zero\b", re.IGNORECASE), "8080"),
+    (re.compile(r"\bthree thousand\b", re.IGNORECASE), "3000"),
+    (re.compile(r"\bfour four three\b", re.IGNORECASE), "443"),
+    (re.compile(r"\bseven five five\b", re.IGNORECASE), "755"),
+    (re.compile(r"\bsix four four\b", re.IGNORECASE), "644"),
+]
 
 _CORRECTIONS_PATH = Path(os.environ.get(
     "TERMITALK_CORRECTIONS",
@@ -175,6 +214,59 @@ def load_user_corrections() -> int:
     return count
 
 
+def _convert_spoken_numbers(text: str) -> str:
+    """Convert consecutive digit-words to digits.
+
+    Single digit-words are left as English. Two or more consecutive
+    digit-words are converted to their numeric form.  "dot"/"period"
+    within a digit sequence becomes "." (for IPs/versions).
+
+    Examples:
+        "one two seven dot zero dot zero dot one" → "127.0.0.1"
+        "port eight zero eight zero" → "port 8080"
+        "five" → "five" (single digit-word left as-is)
+    """
+    # First apply direct number phrase shortcuts
+    for pattern, replacement in _NUMBER_PHRASES:
+        text = pattern.sub(replacement, text)
+
+    tokens = text.split()
+    result: list[str] = []
+    i = 0
+
+    while i < len(tokens):
+        lower = tokens[i].lower()
+        if lower not in _DIGIT_WORDS:
+            result.append(tokens[i])
+            i += 1
+            continue
+
+        # Start accumulating digit-words
+        group: list[str] = [_DIGIT_WORDS[lower]]
+        j = i + 1
+        while j < len(tokens):
+            t = tokens[j].lower()
+            if t in _DIGIT_WORDS:
+                group.append(_DIGIT_WORDS[t])
+                j += 1
+            elif t in ("dot", "period") and j + 1 < len(tokens) and tokens[j + 1].lower() in _DIGIT_WORDS:
+                group.append(".")
+                j += 1
+            else:
+                break
+
+        if len(group) >= 2:
+            # Two or more digit-words → emit as digits
+            result.append("".join(group))
+        else:
+            # Single digit-word → leave as English
+            result.append(tokens[i])
+
+        i = j
+
+    return " ".join(result)
+
+
 def format_text(text: str) -> str:
     """Convert spoken text to CLI-friendly formatted text.
 
@@ -188,6 +280,14 @@ def format_text(text: str) -> str:
     # Normalize whitespace
     text = re.sub(r"\s+", " ", text)
 
+    # Lowercase everything — proper names (README, Makefile) restored via CLI corrections
+    text = text.lower()
+
+    # Strip trailing punctuation, wrapping quotes, and Whisper-inserted commas
+    text = text.rstrip(".,!?;:")
+    text = text.strip("\"'")
+    text = text.replace(", ", " ")
+
     # Remove filler words (case-insensitive, whole words only)
     for filler in FILLERS:
         pattern = r"\b" + re.escape(filler.rstrip(",")) + r",?\b"
@@ -195,6 +295,13 @@ def format_text(text: str) -> str:
 
     # Clean up extra whitespace from filler removal
     text = re.sub(r"\s+", " ", text).strip()
+
+    # Apply CLI term corrections (e.g., "pseudo" → "sudo")
+    for pattern, replacement in CLI_CORRECTIONS:
+        text = pattern.sub(replacement, text)
+
+    # Convert spoken numbers to digits (e.g., "one two seven" → "127")
+    text = _convert_spoken_numbers(text)
 
     # Apply multi-word phrase mappings first (longest match priority)
     for phrase, symbol in PHRASE_MAP:
